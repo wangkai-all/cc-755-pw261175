@@ -1,0 +1,17 @@
+# synthetic fixture: x1 is chimeric (h0 for 0..5, h1 at position 6)
+# lock p0 and p6 with hap0=1,hap1=0 to make x1 an unavoidable conflict
+# every value is artificial binary data written for this demo
+>x0 start=0
+1010
+>x1 start=0
+1010100
+>x2 start=2
+101
+>x3 start=3
+010
+>x4 start=4
+1010
+>x5 start=5
+0101
+>x6 start=6
+010

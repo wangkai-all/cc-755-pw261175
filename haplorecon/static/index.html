@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fragment reassembly — two latent sequences</title>
+<link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <span class="dot"></span>
+    <div>
+      <h1>Fragment reassembly</h1>
+      <p>Two latent binary sequences from sparse fragments — synthetic data only</p>
+    </div>
+  </div>
+  <nav class="tabs" id="tabs">
+    <button data-tab="data" class="active">Data</button>
+    <button data-tab="reconstruct">Reconstruct</button>
+    <button data-tab="versions">Versions</button>
+  </nav>
+</header>
+
+<main>
+  <!-- ================= DATA ================= -->
+  <section class="tabpanel active" id="tab-data">
+    <div class="split">
+      <div class="card">
+        <h2>Import fragments</h2>
+        <p class="muted">
+          FASTA-like (<code>&gt;id start=N</code> then a 0/1 line) or TSV
+          (<code>id&#9;start&#9;sequence</code>). <code>?</code> marks a missing call.
+          All data is synthetic: do not paste real genetic records.
+        </p>
+        <div class="row">
+          <label class="field grow">
+            <span>Name</span>
+            <input id="import-name" type="text" placeholder="synthetic batch" autocomplete="off">
+          </label>
+          <label class="field">
+            <span>Engine</span>
+            <select id="import-engine">
+              <option value="auto">auto (exact when possible)</option>
+              <option value="enum">enumeration (small)</option>
+              <option value="bandb">branch &amp; bound</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>Time per component (s)</span>
+            <input id="import-time" type="number" min="1" max="600" step="1" value="20">
+          </label>
+        </div>
+        <label class="field">
+          <span>Fragment text</span>
+          <textarea id="import-text" rows="12" spellcheck="false" placeholder=">f0 start=0
+0110?1
+>f1 start=4
+1001"></textarea>
+        </label>
+        <div class="row">
+          <button class="primary" id="btn-import">Import &amp; solve</button>
+          <button class="ghost" id="btn-clear">Clear</button>
+        </div>
+        <div id="import-error" class="alert hidden"></div>
+      </div>
+
+      <div class="card">
+        <h2>Bundled synthetic samples</h2>
+        <p class="muted">Each demonstrates one behaviour of the solver.</p>
+        <div id="samples" class="samples"></div>
+        <h2 class="mt">Recent datasets</h2>
+        <div id="dataset-list" class="dataset-list"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= RECONSTRUCT ================= -->
+  <section class="tabpanel" id="tab-reconstruct">
+    <div id="empty-state" class="card empty">
+      <h2>No dataset loaded</h2>
+      <p class="muted">Import fragments or start from a sample on the <b>Data</b> tab.</p>
+      <button class="primary" id="goto-data">Go to Data</button>
+    </div>
+
+    <div id="workspace" class="hidden">
+      <div class="status-strip" id="status-strip"></div>
+
+      <div class="grid-main">
+        <div class="card">
+          <div class="card-head">
+            <h2>Coverage map</h2>
+            <div class="legend">
+              <span><i class="sw sw-c0"></i>hap0</span>
+              <span><i class="sw sw-c1"></i>hap1</span>
+              <span><i class="sw sw-err"></i>error</span>
+              <span><i class="sw sw-lock"></i>locked</span>
+              <span><i class="sw sw-gap"></i>gap</span>
+              <span><i class="sw sw-flip"></i>flip-free</span>
+            </div>
+          </div>
+          <div class="canvas-wrap">
+            <canvas id="coverage-canvas" height="330"></canvas>
+            <div id="canvas-tip" class="tip hidden"></div>
+          </div>
+          <div class="canvas-controls">
+            <span class="muted" id="zoom-label">zoom 1×</span>
+            <button class="ghost small" id="zoom-out">−</button>
+            <button class="ghost small" id="zoom-in">+</button>
+            <button class="ghost small" id="zoom-reset">reset</button>
+            <span class="muted">click a position to locate it</span>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>Solve</h2>
+          <div id="solve-controls" class="stack">
+            <label class="field">
+              <span>Engine</span>
+              <select id="solve-engine">
+                <option value="auto">auto</option>
+                <option value="enum">enumeration</option>
+                <option value="bandb">branch &amp; bound</option>
+              </select>
+            </label>
+            <label class="field">
+              <span>Time per component (s)</span>
+              <input id="solve-time" type="number" min="1" max="600" value="20">
+            </label>
+            <button class="primary" id="btn-resolve">Re-solve current inputs</button>
+          </div>
+          <h2 class="mt">Add connector fragment</h2>
+          <p class="muted">
+            Links two blocks. Only components it touches are recomputed; the rest are reused.
+          </p>
+          <div class="stack">
+            <label class="field"><span>ID</span>
+              <input id="conn-fid" type="text" placeholder="connector1" autocomplete="off"></label>
+            <label class="field"><span>Observations (position:allele, comma separated)</span>
+              <input id="conn-alleles" type="text" placeholder="12:0, 13:1, 14:0" autocomplete="off"></label>
+            <button class="primary" id="btn-connector">Add &amp; re-solve</button>
+          </div>
+          <h2 class="mt">Pin a position</h2>
+          <p class="muted">
+            A lock is a hard constraint. Pinning an order (hap0/hap1) also fixes the free flip.
+          </p>
+          <div class="stack">
+            <label class="field"><span>Position</span>
+              <input id="lock-pos" type="number" min="0" placeholder="12"></label>
+            <div class="row">
+              <label class="field"><span>hap0</span>
+                <select id="lock-hap0"><option value="">—</option><option value="0">0</option><option value="1">1</option></select></label>
+              <label class="field"><span>hap1</span>
+                <select id="lock-hap1"><option value="">—</option><option value="0">0</option><option value="1">1</option></select></label>
+              <label class="field check"><span>distinct</span>
+                <input id="lock-distinct" type="checkbox"></label>
+            </div>
+            <button class="primary" id="btn-lock">Pin position</button>
+            <div id="lock-list" class="lock-list"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <h2>Candidate sequences</h2>
+          <div class="row tight">
+            <label class="field inline"><span>show</span>
+              <select id="sequence-select"></select></label>
+          </div>
+        </div>
+        <p class="muted">
+          <code>-</code> = no observation at that coordinate. Blocks are shown separately:
+          no evidence links them, so they are never stitched into one certain string.
+        </p>
+        <div id="sequence-view" class="sequence-view"></div>
+        <div id="block-summary" class="block-summary"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <h2>Per-fragment assignments and errors</h2>
+          <div class="row tight">
+            <label class="field inline"><span>filter</span>
+              <select id="fragment-filter">
+                <option value="all">all fragments</option>
+                <option value="errors">with errors</option>
+                <option value="conflicts">conflicting</option>
+                <option value="connectors">connectors</option>
+              </select></label>
+            <span class="muted" id="fragment-count"></span>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table class="fragment-table" id="fragment-table">
+            <thead>
+              <tr><th>fragment</th><th>block</th><th>side</th><th>span</th><th>calls</th><th>errors</th><th>comparison</th></tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="grid-two">
+        <div class="card">
+          <h2>Undetermined regions</h2>
+          <div id="undetermined" class="undetermined"></div>
+          <h2 class="mt">Conflict report</h2>
+          <div id="conflicts" class="conflicts"></div>
+        </div>
+        <div class="card">
+          <h2>Equivalence classes</h2>
+          <div id="equivalence" class="equivalence"></div>
+          <h2 class="mt">Compare two solutions</h2>
+          <div class="row tight">
+            <label class="field inline"><span>A</span><select id="cmp-a"></select></label>
+            <label class="field inline"><span>B</span><select id="cmp-b"></select></label>
+            <button class="ghost" id="btn-compare">Compare</button>
+          </div>
+          <div id="compare-output" class="compare-output"></div>
+          <h2 class="mt">Hints</h2>
+          <div id="hints" class="hints"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <h2>Job log</h2>
+          <label class="field inline"><span>history</span>
+            <select id="job-count"><option>10</option><option selected>25</option><option>50</option></select></label>
+        </div>
+        <div id="job-log" class="job-log"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= VERSIONS ================= -->
+  <section class="tabpanel" id="tab-versions">
+    <div class="grid-two">
+      <div class="card">
+        <h2>Input versions</h2>
+        <p class="muted">Every edit appends an immutable input version.</p>
+        <div id="input-versions" class="version-list"></div>
+      </div>
+      <div class="card">
+        <h2>Result versions</h2>
+        <p class="muted">Results are append-only; click one to load it.</p>
+        <div id="result-versions" class="version-list"></div>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Compare result versions</h2>
+      <div class="row tight">
+        <label class="field inline"><span>older</span><select id="ver-a"></select></label>
+        <label class="field inline"><span>newer</span><select id="ver-b"></select></label>
+        <button class="ghost" id="btn-compare-versions">Compare</button>
+      </div>
+      <div id="version-compare-output" class="compare-output"></div>
+    </div>
+    <div class="card">
+      <h2>Exports</h2>
+      <div class="row">
+        <a class="button ghost" id="export-input" href="#" download>Download input text</a>
+        <a class="button ghost" id="export-result" href="#" download>Download result JSON</a>
+      </div>
+    </div>
+  </section>
+</main>
+
+<div id="toast" class="toast hidden"></div>
+<script src="/static/app.js"></script>
+</body>
+</html>
